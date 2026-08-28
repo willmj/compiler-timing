@@ -52,7 +52,7 @@ tests/configs/torch_spyre_tests/inductor/ (see
 test_dedup_constants_config.yaml for the format).
 """
 
-from typing import Any, Callable, Optional, TypeVarTuple, Unpack, override
+from typing import Any, Callable, Optional, TypeVarTuple, override
 
 import unittest
 from unittest.mock import patch
@@ -112,13 +112,12 @@ class _StopBeforeDedupPasses(CustomPreSchedulingPasses):
         pass_list = list(self.passes)
         try:
             dedup_idx = next(
-                i for i, p in enumerate(pass_list)
+                i
+                for i, p in enumerate(pass_list)
                 if getattr(p, "__name__", "") == "dedup_and_promote_constants"
             )
         except StopIteration:
-            raise AssertionError(
-                "dedup_and_promote_constants missing from pipeline"
-            )
+            raise AssertionError("dedup_and_promote_constants missing from pipeline")
 
         # Run everything before dedup — verbatim, no extra observers.
         for pass_fn in pass_list[:dedup_idx]:
@@ -211,18 +210,21 @@ class TestDedupConstantsPassLevel(_BaseDedupPassTest):
         def cb(graph: GraphLowering) -> bool:
             constants = self._constants_in(graph.operations)
             self.assertGreaterEqual(
-                len(constants), 2,
+                len(constants),
+                2,
                 "workload did not produce a duplicate group before "
                 "dedup — cannot exercise the zero-consumer case",
             )
             # Group by identity key.
             from torch_spyre._inductor.dedup_constants import _constant_key
+
             groups: dict[tuple, list[SpyreConstantFallback]] = {}
             for c in constants:
                 groups.setdefault(_constant_key(c), []).append(c)
             multi = [g for g in groups.values() if len(g) > 1]
             self.assertTrue(
-                multi, "no multi-constant group; cannot test zero-consumer dup",
+                multi,
+                "no multi-constant group; cannot test zero-consumer dup",
             )
             group = multi[0]
             canonical, chosen_dup = group[0], group[1]
@@ -232,8 +234,10 @@ class TestDedupConstantsPassLevel(_BaseDedupPassTest):
             # mechanism the pass uses, so the test asserts on the
             # exact ops the pass would have patched.
             live_consumers = [
-                op for op in graph.operations
-                if op is not chosen_dup and op is not canonical
+                op
+                for op in graph.operations
+                if op is not chosen_dup
+                and op is not canonical
                 and any(dep.name == D for dep in op.get_read_writes().reads)
             ]
             # Artificially drop them so chosen_dup has zero readers.
@@ -256,27 +260,33 @@ class TestDedupConstantsPassLevel(_BaseDedupPassTest):
 
             # Assertions.
             self.assertNotIn(
-                chosen_dup, graph.operations,
+                chosen_dup,
+                graph.operations,
                 "chosen_dup should be removed from graph.operations",
             )
             self.assertIn(
-                canonical, graph.operations,
+                canonical,
+                graph.operations,
                 "canonical should survive",
             )
             self.assertIn(
-                D, graph.removed_buffers,
+                D,
+                graph.removed_buffers,
                 "chosen_dup's buffer name should be in removed_buffers",
             )
             self.assertNotIn(
-                D, graph.name_to_buffer,
+                D,
+                graph.name_to_buffer,
                 "chosen_dup's buffer name should be absent from name_to_buffer",
             )
             self.assertNotIn(
-                pre_state["chosen_dup_op_name"], graph.name_to_op,
+                pre_state["chosen_dup_op_name"],
+                graph.name_to_op,
                 "chosen_dup's operation name should be absent from name_to_op",
             )
             self.assertNotIn(
-                D, graph.name_to_users,
+                D,
+                graph.name_to_users,
                 "chosen_dup's buffer name should be absent from name_to_users",
             )
             assertions_ran["ok"] = True
@@ -361,15 +371,23 @@ class TestDedupConstantsPassLevel(_BaseDedupPassTest):
             # pick the natural reader of `canonical` and re-wire it
             # by wrapping its inner_fn in a NameSwapHandler({C: D}).
             reader_of_dup = next(
-                (op for op in graph.operations
-                 if op is not dup and op is not canonical
-                 and any(dep.name == D for dep in op.get_read_writes().reads)),
+                (
+                    op
+                    for op in graph.operations
+                    if op is not dup
+                    and op is not canonical
+                    and any(dep.name == D for dep in op.get_read_writes().reads)
+                ),
                 None,
             )
             reader_of_canonical = next(
-                (op for op in graph.operations
-                 if op is not dup and op is not canonical
-                 and any(dep.name == C for dep in op.get_read_writes().reads)),
+                (
+                    op
+                    for op in graph.operations
+                    if op is not dup
+                    and op is not canonical
+                    and any(dep.name == C for dep in op.get_read_writes().reads)
+                ),
                 None,
             )
             self.assertIsNotNone(reader_of_dup)
@@ -390,7 +408,9 @@ class TestDedupConstantsPassLevel(_BaseDedupPassTest):
 
             # Verify: BOTH readers now report D in their live reads.
             reads_dup1 = {dep.name for dep in reader_of_dup.get_read_writes().reads}
-            reads_dup2 = {dep.name for dep in reader_of_canonical.get_read_writes().reads}
+            reads_dup2 = {
+                dep.name for dep in reader_of_canonical.get_read_writes().reads
+            }
             self.assertIn(D, reads_dup1)
             self.assertIn(D, reads_dup2)
 
@@ -405,11 +425,13 @@ class TestDedupConstantsPassLevel(_BaseDedupPassTest):
             self.assertNotIn(D, reads_after_1, f"{reader_of_dup} still reads D")
             self.assertNotIn(D, reads_after_2, f"{reader_of_canonical} still reads D")
             self.assertIn(
-                C, reads_after_1,
+                C,
+                reads_after_1,
                 f"{reader_of_dup} should now read canonical {C}",
             )
             self.assertIn(
-                C, reads_after_2,
+                C,
+                reads_after_2,
                 f"{reader_of_canonical} should now read canonical {C}",
             )
             self.assertNotIn(dup, graph.operations)
@@ -492,7 +514,8 @@ class TestDedupConstantsPassLevel(_BaseDedupPassTest):
             )
             for D in dup_names:
                 self.assertNotIn(
-                    D, graph.name_to_users,
+                    D,
+                    graph.name_to_users,
                     f"name_to_users still has key for duplicate {D!r}",
                 )
             assertions_ran["ok"] = True
@@ -541,19 +564,19 @@ class TestDedupConstantsPassLevel(_BaseDedupPassTest):
             canonical = multi[0][0]
             n_dups_in_group = len(multi[0]) - 1
 
-            pre_history_len = len(
-                getattr(canonical, "_spyre_prov_history", ()) or ()
-            )
+            pre_history_len = len(getattr(canonical, "_spyre_prov_history", ()) or ())
             dedup_and_promote_constants(graph)
             post_history = getattr(canonical, "_spyre_prov_history", ())
             self.assertIsNotNone(post_history)
             new_entries = post_history[pre_history_len:]
             dedup_transforms = [
-                t for t in new_entries
+                t
+                for t in new_entries
                 if getattr(t, "pass_name", "") == "dedup_and_promote_constants"
             ]
             self.assertEqual(
-                len(dedup_transforms), n_dups_in_group,
+                len(dedup_transforms),
+                n_dups_in_group,
                 f"expected {n_dups_in_group} new dedup ProvenanceTransform(s), "
                 f"got {len(dedup_transforms)}",
             )
@@ -651,7 +674,8 @@ class TestDedupConstantsPassLevel(_BaseDedupPassTest):
             # entry, so calls == 0. Any E-only regression that builds
             # the reverse index unconditionally would trigger this.
             self.assertEqual(
-                calls, 0,
+                calls,
+                0,
                 f"no-duplicate fast path violated: dedup made {calls} "
                 f"ComputedBuffer.get_read_writes calls when there "
                 f"were no duplicate groups",
@@ -694,6 +718,7 @@ class TestBuildReverseConsumerIndex(unittest.TestCase):
     def _fake_dep(self, name: str) -> Any:
         """A minimal Dep-like object with just ``.name``."""
         from types import SimpleNamespace
+
         return SimpleNamespace(name=name)
 
     def _fake_op(self, deps: list[Any]) -> Any:
@@ -701,6 +726,7 @@ class TestBuildReverseConsumerIndex(unittest.TestCase):
         an object with ``.reads`` == the given deps.
         """
         from types import SimpleNamespace
+
         rw = SimpleNamespace(reads=deps)
         return SimpleNamespace(get_read_writes=lambda: rw)
 

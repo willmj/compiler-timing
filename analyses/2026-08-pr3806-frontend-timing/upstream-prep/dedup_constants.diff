@@ -104,7 +104,7 @@
      # --- Step 1: group by identity key ---
      groups: dict[tuple, list[SpyreConstantFallback]] = {}
      for op in operations:
-@@ -128,15 +175,33 @@
+@@ -128,15 +175,31 @@
          key = _constant_key(op)
          groups.setdefault(key, []).append(op)
  
@@ -128,9 +128,7 @@
  
 +    # --- Step 2: dedup, only when duplicates exist ---
 +    if duplicate_names:
-+        consumers_by_name = _build_reverse_consumer_index(
-+            operations, duplicate_names
-+        )
++        consumers_by_name = _build_reverse_consumer_index(operations, duplicate_names)
 +        for key, group in groups.items():
 +            if len(group) <= 1:
 +                continue

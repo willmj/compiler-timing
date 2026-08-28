@@ -187,9 +187,7 @@ def dedup_and_promote_constants(graph: GraphLowering) -> None:
 
     # --- Step 2: dedup, only when duplicates exist ---
     if duplicate_names:
-        consumers_by_name = _build_reverse_consumer_index(
-            operations, duplicate_names
-        )
+        consumers_by_name = _build_reverse_consumer_index(operations, duplicate_names)
         for key, group in groups.items():
             if len(group) <= 1:
                 continue
