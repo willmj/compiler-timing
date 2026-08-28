@@ -107,7 +107,9 @@ structure, not of the passes in general.
 code exists, which is not a function of graph size. Single-sample endpoint
 exponents are fragile exactly as the pr3806 limitations section warns.
 
-## 4. Relayout planning: 39% of the pass, zero plans accepted
+## 4. Relayout planning: 39% of the pass, no plans accepted *on these workloads*
+
+> Scoped result. On workload A relayout does accept plans -- see §7.
 
 `collect_lx_relayout_plans` searches producer/consumer edges for per-core
 ownership disagreements it can fix with an inserted copy. On these workloads it
@@ -130,7 +132,9 @@ division at all?). Not yet prototyped. Note this trade is only unfavorable on
 workloads where no plan survives; a workload where relayout fires pays the search
 once and saves a reshuffle on every read. No such workload has been measured.
 
-## 5. Efficacy: two thirds of buffers reside, and the exclusions are not wins
+## 5. Efficacy on the synthetic workloads: two thirds of buffers reside
+
+> Scoped result. Workload A's exclusion profile is different -- see §7.
 
 The pass had no aggregate efficacy metric — only per-buffer debug logs. Added
 one. At 768 operations:
@@ -162,22 +166,92 @@ rather than `size/ncores` per core. That suits a broadcast-read buffer's shape
 and codegen support for a full-buffer copy-in. Out of scope for a timing study;
 recorded because the histogram is what surfaced it.
 
-## What this does not resolve
+## 6. Workload A: the n^1.45 is gone
 
-**Workload A's n^1.45 is still unexplained**, and this narrows it rather than
-answering it. The solver is quadratic but ~1.1 s at N=4096, roughly 1.5% of the
-74 s the pr3806 study measured at that scale; and prepare is linear here. So
-neither half of the pass, as measured on this family, produces that slope.
+The earlier sections use synthetic workloads. To close the actual open question
+this study left -- opportunity #4, workload A's unattributed n^1.45 scratchpad
+scaling -- `patches/workload_harness_flash.py` parameterizes
+`tests/inductor/test_opspec_tiling.py::test_flash` (whose hardcoded
+Lq=512/Lk=1024 *is* workload A's baseline) and sweeps Lk over the study's own
+range.
 
-The remaining hypothesis: workload A's *per-buffer* gate cost is not constant.
-Several gates call sympy-backed helpers (`op_read_writes`,
-`_per_core_view_on_buf`, `try_device_coordinates`,
-`_would_produce_lx_back_gap`) whose per-call cost grows with expression
-complexity, which itself grows with graph size in a tiled flash-attention graph.
-This is the same mechanism the dedup study found inflating its per-pair constant
-4.6x between workloads. Both the per-pass timers and the histogram work on any
-workload, so a workload-A run would show it directly as per-buffer gate cost
-rising with graph size. That is the next measurement.
+**The reproduction is structurally exact.** At the baseline point,
+`dedup_and_promote_constants` sees 276 input operations and
+`_maybe_scratchpad_planning` sees 260 -- identical to the study's published
+values -- and dedup measures 866.8 ms against the study's 870 ms (0.4%). Same
+graph, same config.
+
+`_maybe_scratchpad_planning`, this tree versus the pr3806 study, 140 -> 2180
+input operations:
+
+| input ops | study (ms) | this tree (ms) | ratio |
+|---:|---:|---:|---:|
+| 140 | 434 | 245.9 | 1.8x |
+| 276 | 959 | 463.5 | 2.1x |
+| 548 | 2,403 | 934.3 | 2.6x |
+| 1,092 | 6,722 | 2,051.7 | 3.3x |
+| 2,180 | **21,037** | **5,088.2** | **4.1x** |
+
+| | study | this tree |
+|---|---:|---:|
+| endpoint exponent | **1.41** | **1.10** |
+| per-operation drift | 3.4x | 1.33x |
+
+The improvement *grows* with graph size, which is a scaling-law change rather
+than a constant-factor speedup. Repeatable: endpoints re-run at 242.7 ms
+(vs 245.9) and 5165.6 ms (vs 5088.2), 1.3-1.5%.
+
+**Opportunity #4 is closed, by tree drift rather than by a deliberate fix** as
+far as the notes record. Which commit did it is not determined here -- that
+needs the study's tree (`a9316b381`), which is not in this clone. The candidates
+are the scratchpad commits since: #3793 (stateless allocator), #3363 and #3849
+(native C++ packer), #3926 (LX relayout guards), #3375 (allocator unification).
+
+### The other two superlinear passes did not improve
+
+Same sweep, same tree:
+
+| pass | study exp | this tree exp | ms @ 2180 ops | study ms | status |
+|---|---:|---:|---:|---:|---|
+| `dedup_and_promote_constants` | 1.96 | **2.02** | 57,343 | 54,646 | PR #4113 in flight |
+| `optimize_restickify_locations` | 1.46 | **1.57** | 39,062 | 39,475 | **nothing in flight** |
+| `_maybe_scratchpad_planning` | 1.45 | 1.10 | 5,088 | 21,037 | effectively linear |
+
+Every other pass measures 0.99-1.01 with per-operation cost flat to within 3%.
+
+**This reorders the priority list.** `optimize_restickify_locations` is
+unchanged from the study (39.1 s versus 39.5 s at the top point) and its
+exponent has not moved. Once #4113 lands, it becomes the dominant frontend
+scaling problem on this workload family -- and it is the one entry in
+`engineering-opportunities.md` with no prototype and an unattributed mechanism.
+
+### The per-buffer hypothesis was right as a mechanism, wrong as the driver
+
+The prediction going in was that per-buffer gate cost rises with expression
+complexity. It does: `residency_reasons` measures exponent 1.28 with per-operation
+cost drifting **2.15x** across the sweep, while every whole-pass helper around it
+stays flat. So the mechanism is real and is what remains of the pass's residual
+1.10. It is simply no longer large enough to produce a 1.45.
+
+## 7. Two claims from the synthetic workloads that do not generalize
+
+Recorded because both were stated more broadly than the evidence supported.
+
+**Relayout does find plans on workload A.** `finalize_lx_relayout` grows 0.19 ->
+2.50 ms and `append_lx_relayout_destinations` 0.18 -> 20.57 ms across the sweep;
+`_finalize_lx_relayout_allocation` early-returns on an empty plan list, so
+non-zero time means plans exist and are being accepted. The "39% of the pass and
+finds nothing" result in §4 is specific to the synthetic workloads. The
+pre-filter idea survives -- it would skip the search only where there is nothing
+to find -- but the framing that the search is wasted does not. Relayout is still
+32% of the pass at the largest workload-A point (1,638 ms of 5,088 ms).
+
+**The exclusion profile is workload-specific.** §5 found one gate causing 99.6%
+of exclusions, split between K-split writer and broadcast read. On workload A the
+dominant gate is instead `op not allowed` -- the 19-entry allowlist -- at 960 of
+961 barred buffers at the largest point, with 960 of 2,184 buffers placed (44%).
+The histogram is doing its job; the conclusion drawn from one workload was not
+transferable.
 
 ## Incidental
 
