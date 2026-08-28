@@ -1,0 +1,591 @@
+<title>LX Scratchpad Planning</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Serif:ital,wght@0,400;0,500;1,400&display=swap">
+
+<style>
+  :root {
+    --ground: #eef1f4;
+    --surface: #ffffff;
+    --surface-2: #e4e9ee;
+    --ink: #1a1f27;
+    --ink-2: #46505d;
+    --ink-3: #6d7885;
+    --rule: #c9d2db;
+    --rule-soft: #dde4ea;
+    --lx: #0e6f80;
+    --lx-soft: rgba(14, 111, 128, 0.13);
+    --hbm: #96631a;
+    --hbm-soft: rgba(150, 99, 26, 0.13);
+    --relayout: #6a4a9c;
+    --relayout-soft: rgba(106, 74, 156, 0.13);
+
+    --sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+    --serif: "IBM Plex Serif", Georgia, "Times New Roman", serif;
+    --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #11151a;
+      --surface: #171d24;
+      --surface-2: #1f272f;
+      --ink: #dde3ea;
+      --ink-2: #a5b0bc;
+      --ink-3: #7c8794;
+      --rule: #2e3841;
+      --rule-soft: #232b33;
+      --lx: #3fb3c4;
+      --lx-soft: rgba(63, 179, 196, 0.16);
+      --hbm: #d3a349;
+      --hbm-soft: rgba(211, 163, 73, 0.16);
+      --relayout: #a68ae2;
+      --relayout-soft: rgba(166, 138, 226, 0.16);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground: #11151a;
+    --surface: #171d24;
+    --surface-2: #1f272f;
+    --ink: #dde3ea;
+    --ink-2: #a5b0bc;
+    --ink-3: #7c8794;
+    --rule: #2e3841;
+    --rule-soft: #232b33;
+    --lx: #3fb3c4;
+    --lx-soft: rgba(63, 179, 196, 0.16);
+    --hbm: #d3a349;
+    --hbm-soft: rgba(211, 163, 73, 0.16);
+    --relayout: #a68ae2;
+    --relayout-soft: rgba(166, 138, 226, 0.16);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: 17px;
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: clamp(28px, 5vw, 72px) clamp(18px, 4vw, 44px) 96px;
+  }
+
+  .measure { max-width: 64ch; }
+
+  header.masthead {
+    border-bottom: 2px solid var(--ink);
+    padding-bottom: 22px;
+    margin-bottom: 40px;
+  }
+
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    margin: 0 0 14px;
+  }
+
+  h1 {
+    font-family: var(--sans);
+    font-weight: 700;
+    font-size: clamp(30px, 5.2vw, 47px);
+    line-height: 1.06;
+    letter-spacing: -0.021em;
+    text-wrap: balance;
+    margin: 0 0 16px;
+  }
+
+  .standfirst {
+    font-size: clamp(17px, 2.1vw, 19.5px);
+    line-height: 1.55;
+    color: var(--ink-2);
+    max-width: 60ch;
+    margin: 0;
+  }
+
+  h2 {
+    font-family: var(--sans);
+    font-weight: 600;
+    font-size: clamp(21px, 2.8vw, 26px);
+    letter-spacing: -0.012em;
+    line-height: 1.2;
+    text-wrap: balance;
+    margin: 0 0 6px;
+  }
+
+  h3 {
+    font-family: var(--sans);
+    font-weight: 600;
+    font-size: 17px;
+    letter-spacing: -0.004em;
+    margin: 0 0 8px;
+  }
+
+  section { margin-top: 56px; }
+
+  .sec-head {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    border-top: 1px solid var(--rule);
+    padding-top: 14px;
+    margin-bottom: 20px;
+  }
+
+  .sec-num {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--lx);
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    flex: none;
+    padding-top: 6px;
+  }
+
+  p { margin: 0 0 18px; }
+  p:last-child { margin-bottom: 0; }
+
+  code {
+    font-family: var(--mono);
+    font-size: 0.875em;
+    background: var(--surface-2);
+    padding: 0.1em 0.34em;
+    border-radius: 2px;
+  }
+
+  strong { font-weight: 600; }
+  em { font-style: italic; }
+
+  a { color: var(--lx); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+  a:focus-visible, summary:focus-visible {
+    outline: 2px solid var(--lx);
+    outline-offset: 3px;
+    border-radius: 2px;
+  }
+
+  figure {
+    margin: 30px 0;
+    padding: 22px 20px 16px;
+    background: var(--surface);
+    border: 1px solid var(--rule-soft);
+    border-radius: 3px;
+    overflow-x: auto;
+  }
+
+  figure svg { display: block; width: 100%; max-width: 100%; height: auto; min-width: 480px; }
+
+  figcaption {
+    font-family: var(--sans);
+    font-size: 13.5px;
+    line-height: 1.5;
+    color: var(--ink-2);
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top: 1px solid var(--rule-soft);
+    max-width: 78ch;
+  }
+  figcaption b { color: var(--ink); font-weight: 600; }
+
+  .svg-label { font-family: var(--mono); font-size: 12px; fill: currentColor; }
+  .svg-label-sm { font-family: var(--mono); font-size: 10.5px; fill: currentColor; }
+  .svg-title { font-family: var(--sans); font-size: 12.5px; font-weight: 600; fill: currentColor; }
+  .svg-muted { fill: var(--ink-3); }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: var(--sans);
+    font-size: 14px;
+    font-variant-numeric: tabular-nums;
+    margin: 8px 0 6px;
+  }
+  caption {
+    text-align: left;
+    font-family: var(--sans);
+    font-size: 13px;
+    color: var(--ink-2);
+    padding-bottom: 10px;
+  }
+  th, td { text-align: right; padding: 8px 10px; border-bottom: 1px solid var(--rule-soft); }
+  th:first-child, td:first-child { text-align: left; }
+  thead th {
+    font-size: 11.5px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    border-bottom: 1px solid var(--rule);
+  }
+  td.mono, th.mono { font-family: var(--mono); font-size: 13px; }
+  tr.total td { border-top: 1px solid var(--rule); border-bottom: none; font-weight: 600; }
+  .indent-1 { padding-left: 26px; }
+  .indent-2 { padding-left: 46px; }
+
+  .gates { display: grid; gap: 1px; background: var(--rule-soft); border: 1px solid var(--rule-soft); border-radius: 3px; margin: 22px 0; }
+  .gate { background: var(--surface); padding: 11px 14px; display: flex; gap: 13px; align-items: baseline; }
+  .gate-n { font-family: var(--mono); font-size: 11px; color: var(--ink-3); flex: none; min-width: 1.4em; }
+  .gate-body { font-family: var(--sans); font-size: 14px; line-height: 1.45; }
+  .gate-body b { font-weight: 600; }
+  .gate-body span { color: var(--ink-2); }
+
+  .callout {
+    border-left: 3px solid var(--relayout);
+    background: var(--relayout-soft);
+    padding: 16px 18px;
+    border-radius: 0 3px 3px 0;
+    margin: 26px 0;
+    font-size: 16px;
+  }
+  .callout p { margin-bottom: 10px; }
+  .callout .ct {
+    font-family: var(--sans);
+    font-size: 11.5px;
+    font-weight: 600;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--relayout);
+    display: block;
+    margin-bottom: 8px;
+  }
+
+  .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(148px, 1fr)); gap: 1px; background: var(--rule-soft); border: 1px solid var(--rule-soft); border-radius: 3px; margin: 26px 0; }
+  .fact { background: var(--surface); padding: 15px 16px; }
+  .fact dt { font-family: var(--sans); font-size: 11px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 7px; }
+  .fact dd { margin: 0; font-family: var(--mono); font-size: 18px; font-weight: 500; color: var(--ink); letter-spacing: -0.01em; }
+  .fact dd small { display: block; font-family: var(--serif); font-size: 12.5px; color: var(--ink-2); margin-top: 5px; letter-spacing: 0; line-height: 1.4; }
+
+  .scope {
+    font-family: var(--sans);
+    font-size: 13.5px;
+    line-height: 1.55;
+    color: var(--ink-2);
+    background: var(--surface-2);
+    border-radius: 3px;
+    padding: 15px 17px;
+    margin: 28px 0 0;
+  }
+  .scope b { color: var(--ink); font-weight: 600; }
+
+  footer {
+    margin-top: 64px;
+    padding-top: 18px;
+    border-top: 1px solid var(--rule);
+    font-family: var(--mono);
+    font-size: 11.5px;
+    color: var(--ink-3);
+    line-height: 1.7;
+  }
+
+  ul.tight { margin: 0 0 18px; padding-left: 1.15em; }
+  ul.tight li { margin-bottom: 7px; }
+</style>
+
+<div class="page">
+
+<header class="masthead">
+  <p class="eyebrow">torch-spyre &middot; _inductor / scratchpad</p>
+  <h1>LX Scratchpad Planning</h1>
+  <p class="standfirst">The pass decides which tensors get to live in the accelerator&rsquo;s 1.55&nbsp;MiB per-core scratchpad instead of round-tripping through HBM &mdash; and one of its sub-steps, LX relayout planning, measured 39% of the pass.</p>
+</header>
+
+<div class="measure">
+<p>Spyre cores have a small, software-managed scratchpad called <strong>LX</strong>. It is not a cache: nothing evicts or fills automatically, and it is not threaded through the generated wrapper as a tensor. A buffer that lives there is handed from one kernel launch to the next <em>by its LX offset alone</em>. Somebody has to assign those offsets, and that somebody is <code>_maybe_scratchpad_planning</code>, the last of the twenty pre-scheduling passes.</p>
+
+<p>Everything below about mechanism comes from the source. The timings are mine, from one small workload &mdash; scope is stated at the end.</p>
+</div>
+
+<dl class="facts">
+  <div class="fact"><dt>Physical LX</dt><dd>2 MiB<small>per core</small></dd></div>
+  <div class="fact"><dt>Frontend share</dt><dd>1.55 MiB<small>after a 64 KiB program reservation and DXP&rsquo;s 20%</small></dd></div>
+  <div class="fact"><dt>Granularity</dt><dd>128 B<small>one stick</small></dd></div>
+  <div class="fact"><dt>Eligible ops</dt><dd>19<small>an allowlist: mm, bmm, exp, sum, mul, silu&hellip;</small></dd></div>
+</dl>
+
+<section>
+  <div class="sec-head"><span class="sec-num">01</span><div><h2>What residency buys</h2></div></div>
+  <div class="measure">
+    <p>A buffer that is produced and then read has two possible homes. In HBM, any core can address any byte, but every access pays main-memory latency. In LX, the access is core-local and fast &mdash; but each core physically holds only its own slice.</p>
+    <p>The saving is counted in <em>reads</em>, not accesses. The first touch is the producer&rsquo;s write (or, for a graph input, an unavoidable clone-in), so the allocator&rsquo;s own accounting discounts it: a buffer read only once by its producer saves nothing and is barred with <code>no consumer reads it from LX</code>.</p>
+  </div>
+
+  <figure>
+    <svg viewBox="0 0 700 262" role="img" aria-label="A buffer produced then read twice: spilled to HBM every access pays main memory, resident in LX the reads are served core-locally.">
+      <defs>
+        <marker id="ah" viewBox="0 0 10 8" refX="9" refY="4" markerWidth="8" markerHeight="7" orient="auto">
+          <polygon points="0,0 10,4 0,8" fill="currentColor"></polygon>
+        </marker>
+        <marker id="ah-lx" viewBox="0 0 10 8" refX="9" refY="4" markerWidth="8" markerHeight="7" orient="auto">
+          <polygon points="0,0 10,4 0,8" fill="var(--lx)"></polygon>
+        </marker>
+      </defs>
+
+      <text class="svg-title" x="36" y="26">Spilled &mdash; buf7 lives in HBM</text>
+      <rect x="36" y="40" width="126" height="46" rx="2" fill="none" stroke="currentColor" stroke-width="1.2"></rect>
+      <text class="svg-label" x="99" y="61" text-anchor="middle">producer</text>
+      <text class="svg-label-sm svg-muted" x="99" y="76" text-anchor="middle">buf7 = exp(...)</text>
+
+      <rect x="287" y="40" width="126" height="46" rx="2" fill="var(--hbm-soft)" stroke="var(--hbm)" stroke-width="1.2"></rect>
+      <text class="svg-label" x="350" y="61" text-anchor="middle" fill="var(--hbm)">HBM</text>
+      <text class="svg-label-sm" x="350" y="76" text-anchor="middle" fill="var(--hbm)">any core, slow</text>
+
+      <rect x="538" y="40" width="126" height="46" rx="2" fill="none" stroke="currentColor" stroke-width="1.2"></rect>
+      <text class="svg-label" x="601" y="61" text-anchor="middle">2 consumers</text>
+      <text class="svg-label-sm svg-muted" x="601" y="76" text-anchor="middle">sum, div</text>
+
+      <line x1="162" y1="63" x2="281" y2="63" stroke="currentColor" stroke-width="1.3" marker-end="url(#ah)"></line>
+      <text class="svg-label-sm" x="221" y="55" text-anchor="middle">write</text>
+      <line x1="413" y1="63" x2="532" y2="63" stroke="currentColor" stroke-width="1.3" marker-end="url(#ah)"></line>
+      <text class="svg-label-sm" x="472" y="55" text-anchor="middle">2 reads</text>
+
+      <line x1="36" y1="118" x2="664" y2="118" stroke="var(--rule)" stroke-width="1"></line>
+
+      <text class="svg-title" x="36" y="152">Resident &mdash; buf7 pinned at an LX offset</text>
+      <rect x="36" y="166" width="126" height="46" rx="2" fill="none" stroke="currentColor" stroke-width="1.2"></rect>
+      <text class="svg-label" x="99" y="187" text-anchor="middle">producer</text>
+      <text class="svg-label-sm svg-muted" x="99" y="202" text-anchor="middle">buf7 = exp(...)</text>
+
+      <rect x="287" y="166" width="126" height="46" rx="2" fill="var(--lx-soft)" stroke="var(--lx)" stroke-width="1.5"></rect>
+      <text class="svg-label" x="350" y="187" text-anchor="middle" fill="var(--lx)">LX @ 0x0</text>
+      <text class="svg-label-sm" x="350" y="202" text-anchor="middle" fill="var(--lx)">core-local, fast</text>
+
+      <rect x="538" y="166" width="126" height="46" rx="2" fill="none" stroke="currentColor" stroke-width="1.2"></rect>
+      <text class="svg-label" x="601" y="187" text-anchor="middle">2 consumers</text>
+      <text class="svg-label-sm svg-muted" x="601" y="202" text-anchor="middle">sum, div</text>
+
+      <line x1="162" y1="189" x2="281" y2="189" stroke="currentColor" stroke-width="1.3" marker-end="url(#ah)"></line>
+      <text class="svg-label-sm" x="221" y="181" text-anchor="middle">write</text>
+      <line x1="413" y1="189" x2="532" y2="189" stroke="var(--lx)" stroke-width="1.7" marker-end="url(#ah-lx)"></line>
+      <text class="svg-label-sm" x="472" y="181" text-anchor="middle" fill="var(--lx)">2 reads saved</text>
+
+      <text class="svg-label-sm svg-muted" x="350" y="240" text-anchor="middle">the write happens either way &mdash; residency is priced on the reads after it</text>
+    </svg>
+    <figcaption><b>What the pass is optimizing.</b> Residency does not remove the producer&rsquo;s write; it removes main-memory latency from every subsequent read. A buffer with no consumer reads is therefore barred on principle, not on capacity.</figcaption>
+  </figure>
+</section>
+
+<section>
+  <div class="sec-head"><span class="sec-num">02</span><div><h2>The packing problem</h2></div></div>
+  <div class="measure">
+    <p>Once eligibility is settled, what remains is a two-dimensional packing problem, and it is worth seeing in the allocator&rsquo;s own terms. Every candidate becomes a <code>LifetimeBoundBuffer</code>: a name, a size, and a strictly increasing list of the operation indices that touch it. Its live range runs from the first touch to just past the last.</p>
+    <p>So each buffer is a rectangle &mdash; <em>size</em> tall, <em>lifetime</em> wide &mdash; and the solver must place all of them inside a fixed 1.55&nbsp;MiB ceiling without any two overlapping in both address and time. Rectangles whose lifetimes are disjoint may share an address; that is how a slot gets reused.</p>
+    <p>The default solver, <code>GreedyLayoutSolver</code>, walks the transition ticks in order. At each tick it frees the buffers that just died, then places the buffers that just became live &mdash; trying in-place reuse of a dying parent first, then the space below the lowest allocation, then above the highest, then any gap in between wide enough to hold it. Anything left unplaced keeps <code>address = None</code> and spills.</p>
+  </div>
+
+  <figure>
+    <svg viewBox="0 0 760 402" role="img" aria-label="Address versus time map of the LX scratchpad: buffers as rectangles packed under a fixed ceiling, one slot reused in place, one buffer spilled for want of room.">
+      <text class="svg-title" x="46" y="24">LX address</text>
+      <text class="svg-title" x="714" y="386" text-anchor="end">logical time (operation index)</text>
+
+      <rect x="100" y="36" width="600" height="24" fill="var(--hbm-soft)"></rect>
+      <text class="svg-label-sm" x="108" y="52" fill="var(--hbm)">DXP-owned &mdash; 20% of tracker capacity</text>
+      <line x1="100" y1="60" x2="700" y2="60" stroke="var(--hbm)" stroke-width="1.6" stroke-dasharray="5 3"></line>
+      <text class="svg-label-sm" x="694" y="76" text-anchor="end" fill="var(--hbm)">ceiling: 1.55 MiB</text>
+
+      <line x1="100" y1="60" x2="100" y2="330" stroke="currentColor" stroke-width="1.2"></line>
+      <line x1="100" y1="330" x2="700" y2="330" stroke="currentColor" stroke-width="1.2"></line>
+      <text class="svg-label-sm svg-muted" x="92" y="334" text-anchor="end">0x0</text>
+
+      <line x1="100" y1="330" x2="100" y2="336" stroke="currentColor"></line>
+      <text class="svg-label-sm svg-muted" x="100" y="350" text-anchor="middle">0</text>
+      <line x1="212" y1="330" x2="212" y2="336" stroke="currentColor"></line>
+      <text class="svg-label-sm svg-muted" x="212" y="350" text-anchor="middle">4</text>
+      <line x1="324" y1="330" x2="324" y2="336" stroke="currentColor"></line>
+      <text class="svg-label-sm svg-muted" x="324" y="350" text-anchor="middle">8</text>
+      <line x1="436" y1="330" x2="436" y2="336" stroke="currentColor"></line>
+      <text class="svg-label-sm svg-muted" x="436" y="350" text-anchor="middle">12</text>
+      <line x1="548" y1="330" x2="548" y2="336" stroke="currentColor"></line>
+      <text class="svg-label-sm svg-muted" x="548" y="350" text-anchor="middle">16</text>
+      <line x1="660" y1="330" x2="660" y2="336" stroke="currentColor"></line>
+      <text class="svg-label-sm svg-muted" x="660" y="350" text-anchor="middle">20</text>
+
+      <rect x="156" y="265" width="140" height="65" fill="var(--lx-soft)" stroke="var(--lx)" stroke-width="1.4"></rect>
+      <text class="svg-label-sm" x="226" y="295" text-anchor="middle" fill="var(--lx)">buf3</text>
+      <text class="svg-label-sm" x="226" y="309" text-anchor="middle" fill="var(--lx)">384 KB</text>
+
+      <rect x="184" y="221" width="224" height="44" fill="var(--lx-soft)" stroke="var(--lx)" stroke-width="1.4"></rect>
+      <text class="svg-label-sm" x="296" y="248" text-anchor="middle" fill="var(--lx)">buf5 &mdash; 256 KB</text>
+
+      <rect x="240" y="134" width="252" height="87" fill="var(--lx-soft)" stroke="var(--lx)" stroke-width="1.4"></rect>
+      <text class="svg-label-sm" x="366" y="174" text-anchor="middle" fill="var(--lx)">buf8</text>
+      <text class="svg-label-sm" x="366" y="188" text-anchor="middle" fill="var(--lx)">512 KB</text>
+
+      <rect x="324" y="297" width="140" height="33" fill="var(--lx-soft)" stroke="var(--lx)" stroke-width="1.4"></rect>
+      <text class="svg-label-sm" x="394" y="318" text-anchor="middle" fill="var(--lx)">buf11 &mdash; 192 KB</text>
+
+      <rect x="464" y="297" width="112" height="33" fill="none" stroke="var(--lx)" stroke-width="1.4" stroke-dasharray="4 3"></rect>
+      <text class="svg-label-sm" x="520" y="318" text-anchor="middle" fill="var(--lx)">buf14</text>
+
+      <text class="svg-label-sm svg-muted" x="464" y="290" text-anchor="middle">in-place reuse</text>
+
+      <rect x="576" y="86" width="112" height="109" fill="none" stroke="var(--hbm)" stroke-width="1.4" stroke-dasharray="4 3" opacity="0.85"></rect>
+      <text class="svg-label-sm" x="632" y="128" text-anchor="middle" fill="var(--hbm)">buf17</text>
+      <text class="svg-label-sm" x="632" y="142" text-anchor="middle" fill="var(--hbm)">640 KB</text>
+      <text class="svg-label-sm" x="632" y="156" text-anchor="middle" fill="var(--hbm)">spilled</text>
+
+      <text class="svg-label-sm svg-muted" x="100" y="376">each rectangle is one LifetimeBoundBuffer: size tall, live range wide</text>
+    </svg>
+    <figcaption><b>The solver&rsquo;s actual job.</b> Disjoint lifetimes may share an address &mdash; <code>buf11</code> takes the slot <code>buf3</code> vacated, and <code>buf14</code> inherits <code>buf11</code>&rsquo;s in place. <code>buf17</code> is live while the tall buffers are, so no gap under the ceiling fits it and it keeps <code>address = None</code>. Nothing is evicted to make room; spilling is the only outcome for a buffer that does not fit.</figcaption>
+  </figure>
+</section>
+
+<section>
+  <div class="sec-head"><span class="sec-num">03</span><div><h2>Most of the work is deciding who is eligible</h2></div></div>
+  <div class="measure">
+    <p>Here is the part that surprised me when I measured it. The packing above is cheap. The expensive part is arriving at the candidate set at all &mdash; because a buffer must clear twelve independent gates before it is even offered to the solver, and several of those gates require walking the graph.</p>
+    <p>Nothing is dropped for ineligibility: a barred buffer is still handed over carrying its <code>residency_reason</code>, and the solver declines to place it. The reasons survive into the log, which is how you find out why something you expected in LX is not.</p>
+    <p>The order is deliberate &mdash; cheap structural guards first, and the back-gap probe last because it touches <code>device_layout</code> and costs the most:</p>
+  </div>
+
+  <div class="gates">
+    <div class="gate"><span class="gate-n">1</span><span class="gate-body"><b>op not allowed</b> <span>&mdash; the producing op is not on the 19-entry LX-reuse allowlist</span></span></div>
+    <div class="gate"><span class="gate-n">2</span><span class="gate-body"><b>unsized</b> <span>&mdash; no device layout, so no computable footprint</span></span></div>
+    <div class="gate"><span class="gate-n">3</span><span class="gate-body"><b>mutation target</b></span></div>
+    <div class="gate"><span class="gate-n">4</span><span class="gate-body"><b>tiled (advancing)</b> <span>&mdash; the address moves per coarse-tile iteration, which LX cannot express</span></span></div>
+    <div class="gate"><span class="gate-n">5</span><span class="gate-body"><b>read by restickify</b> <span>&mdash; a cross-frame barrier: read and write frames are transposes</span></span></div>
+    <div class="gate"><span class="gate-n">6</span><span class="gate-body"><b>live across an extern kernel</b> <span>&mdash; an opaque call may launch another program that reuses the same offsets</span></span></div>
+    <div class="gate"><span class="gate-n">7</span><span class="gate-body"><b>index tensor or indirectly accessed</b> <span>&mdash; data-dependent addressing must resolve from HBM</span></span></div>
+    <div class="gate"><span class="gate-n">8</span><span class="gate-body"><b>graph output</b> <span>&mdash; unless boundary cloning is on</span></span></div>
+    <div class="gate"><span class="gate-n">9</span><span class="gate-body"><b>partial or offset read</b></span></div>
+    <div class="gate"><span class="gate-n">10</span><span class="gate-body"><b>core division mismatch</b> <span>&mdash; users disagree about how the buffer is split across cores</span></span></div>
+    <div class="gate"><span class="gate-n">11</span><span class="gate-body"><b>no consumer reads it from LX</b> <span>&mdash; residency would save nothing</span></span></div>
+    <div class="gate"><span class="gate-n">12</span><span class="gate-body"><b>LX back gap</b> <span>&mdash; supported in HBM, not in LX</span></span></div>
+  </div>
+
+  <div class="measure">
+    <p>Gate 6 is the one worth internalizing, because it explains why the scratchpad is so conservative. LX is shared by <em>every</em> compiled Spyre program. An extern kernel is opaque &mdash; its body can launch a nested compile, and that program will allocate the same LX offsets. A buffer merely <em>live across</em> such a call is silently overwritten, and its consumer reads another program&rsquo;s data. Being live across the hazard is as fatal as being touched by it.</p>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head"><span class="sec-num">04</span><div><h2>Where LX relayout planning fits</h2></div></div>
+  <div class="measure">
+    <p>Gate 10 rejects a buffer whose users disagree about how it is split across cores. LX relayout planning exists to rescue a specific case of exactly that disagreement, and it runs <em>before</em> buffer generation, as the first thing <code>_prepare_buffers</code> does.</p>
+    <p>The hardware fact underneath it: when a buffer is resident, each core physically holds only the slice it owns. A <code>PerCoreView</code> records that ownership &mdash; which device dimensions are split, by how much, and which slot each core gets. If the producer writes the buffer split one way and a consumer wants to read it split another way, then a core reading its own slice of the <em>output</em> needs bytes from other cores&rsquo; slices of the <em>input</em>. LX cannot do that.</p>
+  </div>
+
+  <figure>
+    <svg viewBox="0 0 760 418" role="img" aria-label="A buffer written split by rows across four cores but read split by columns; core zero needs bytes from all four rows, so a relayout copy is inserted and the pair is allocated atomically in LX.">
+      <defs>
+        <marker id="ah-rl" viewBox="0 0 10 8" refX="9" refY="4" markerWidth="8" markerHeight="7" orient="auto">
+          <polygon points="0,0 10,4 0,8" fill="var(--relayout)"></polygon>
+        </marker>
+      </defs>
+      <text class="svg-title" x="46" y="26">as the producer wrote it</text>
+      <text class="svg-label-sm svg-muted" x="46" y="44">split on dim 0 &mdash; core k owns row k</text>
+
+      <rect x="46" y="60" width="160" height="160" fill="none" stroke="currentColor" stroke-width="1.3"></rect>
+      <rect x="46" y="60" width="160" height="40" fill="var(--lx)" opacity="0.30"></rect>
+      <rect x="46" y="100" width="160" height="40" fill="var(--lx)" opacity="0.22"></rect>
+      <rect x="46" y="140" width="160" height="40" fill="var(--lx)" opacity="0.14"></rect>
+      <rect x="46" y="180" width="160" height="40" fill="var(--lx)" opacity="0.07"></rect>
+      <line x1="46" y1="100" x2="206" y2="100" stroke="currentColor" stroke-width="0.7"></line>
+      <line x1="46" y1="140" x2="206" y2="140" stroke="currentColor" stroke-width="0.7"></line>
+      <line x1="46" y1="180" x2="206" y2="180" stroke="currentColor" stroke-width="0.7"></line>
+      <text class="svg-label-sm svg-muted" x="38" y="85" text-anchor="end">c0</text>
+      <text class="svg-label-sm svg-muted" x="38" y="125" text-anchor="end">c1</text>
+      <text class="svg-label-sm svg-muted" x="38" y="165" text-anchor="end">c2</text>
+      <text class="svg-label-sm svg-muted" x="38" y="205" text-anchor="end">c3</text>
+
+      <rect x="46" y="60" width="40" height="160" fill="none" stroke="var(--relayout)" stroke-width="2" stroke-dasharray="4 3"></rect>
+      <text class="svg-label-sm" x="66" y="243" text-anchor="middle" fill="var(--relayout)">core 0 needs</text>
+      <text class="svg-label-sm" x="66" y="257" text-anchor="middle" fill="var(--relayout)">all four rows</text>
+
+      <rect x="316" y="120" width="128" height="42" rx="2" fill="var(--relayout-soft)" stroke="var(--relayout)" stroke-width="1.5"></rect>
+      <text class="svg-label-sm" x="380" y="137" text-anchor="middle" fill="var(--relayout)">relayout copy</text>
+      <text class="svg-label-sm" x="380" y="152" text-anchor="middle" fill="var(--relayout)">physical reshuffle</text>
+
+      <line x1="206" y1="141" x2="310" y2="141" stroke="var(--relayout)" stroke-width="1.6" marker-end="url(#ah-rl)"></line>
+      <line x1="444" y1="141" x2="548" y2="141" stroke="var(--relayout)" stroke-width="1.6" marker-end="url(#ah-rl)"></line>
+
+      <text class="svg-title" x="554" y="26">as the consumer reads it</text>
+      <text class="svg-label-sm svg-muted" x="554" y="44">split on dim 1 &mdash; core k owns column k</text>
+
+      <rect x="554" y="60" width="160" height="160" fill="none" stroke="currentColor" stroke-width="1.3"></rect>
+      <rect x="554" y="60" width="40" height="160" fill="var(--lx)" opacity="0.30"></rect>
+      <rect x="594" y="60" width="40" height="160" fill="var(--lx)" opacity="0.22"></rect>
+      <rect x="634" y="60" width="40" height="160" fill="var(--lx)" opacity="0.14"></rect>
+      <rect x="674" y="60" width="40" height="160" fill="var(--lx)" opacity="0.07"></rect>
+      <line x1="594" y1="60" x2="594" y2="220" stroke="currentColor" stroke-width="0.7"></line>
+      <line x1="634" y1="60" x2="634" y2="220" stroke="currentColor" stroke-width="0.7"></line>
+      <line x1="674" y1="60" x2="674" y2="220" stroke="currentColor" stroke-width="0.7"></line>
+      <text class="svg-label-sm svg-muted" x="574" y="238" text-anchor="middle">c0</text>
+      <text class="svg-label-sm svg-muted" x="614" y="238" text-anchor="middle">c1</text>
+      <text class="svg-label-sm svg-muted" x="654" y="238" text-anchor="middle">c2</text>
+      <text class="svg-label-sm svg-muted" x="694" y="238" text-anchor="middle">c3</text>
+
+      <line x1="46" y1="300" x2="714" y2="300" stroke="var(--rule)" stroke-width="1"></line>
+      <rect x="46" y="316" width="668" height="72" rx="2" fill="var(--relayout-soft)" stroke="var(--relayout)" stroke-width="1" stroke-dasharray="3 3"></rect>
+      <text class="svg-label" x="380" y="342" text-anchor="middle" fill="var(--relayout)">source and copy are placed as one atomic pair</text>
+      <text class="svg-label-sm svg-muted" x="380" y="362" text-anchor="middle">both ends must land in LX and must not overlap &mdash; if either misses,</text>
+      <text class="svg-label-sm svg-muted" x="380" y="377" text-anchor="middle">the whole group is demoted and consumers keep using the original buffer</text>
+    </svg>
+    <figcaption><b>The disagreement relayout resolves.</b> Without it, a producer and consumer that split the same buffer along different dimensions force the buffer to HBM. With it, an explicit copy carrying the consumer&rsquo;s ownership is inserted, and the reshuffle happens once instead of every read. Codegen recognizes the copy as an LX-relayout identity precisely <i>because</i> the two work divisions differ &mdash; if distinct views collapse to the same division, the plan is rejected rather than lowered as an ordinary no-op copy.</figcaption>
+  </figure>
+
+  <div class="measure">
+    <h3>Why the search is expensive</h3>
+    <p><code>collect_lx_relayout_plans</code> builds a reverse index of every buffer&rsquo;s readers, then for each candidate source runs a gauntlet: compute the producer&rsquo;s per-core view, project ownership into loop symbols, and for every consumer check that its view is total and representable, that it uses the same core count, that it is pointwise or a two-input matmul, and that the two partitions are compatible. Any single failing consumer rejects the whole group &mdash; the copies sharing a source are all-or-nothing.</p>
+    <p>The compatibility check is the costly one. <code>_compatible_partitions</code> compares every source core slice against every destination core slice to confirm the mapping is a clean permutation with uniform fan-in and fan-out. That is quadratic in core count, per candidate &mdash; and core count is 32 by default. It is also the reason this cost should be expected to move with <code>SENCORES</code>, an axis no committed measurement has varied.</p>
+    <p>Accepted plans are not applied here. They ride into the solver attached to their source buffer, get addresses assigned as a pair, and are only materialized into the graph at the very end of <code>_push_allocation</code> &mdash; last, and still inside pre-scheduling, because a solver retry needs the original graph intact.</p>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head"><span class="sec-num">05</span><div><h2>Measured shape</h2></div></div>
+  <div class="measure">
+    <p>Instrumenting the ten steps of <code>plan_allocation</code> closes the pass to 100% (residual 0.02%). The split is lopsided in a way no static reading of the code predicted &mdash; I predicted the solver would dominate, and it is 1%:</p>
+  </div>
+
+  <table>
+    <caption>Softmax-stack workload, fp16, 128&times;128, depth 32, 128 placeable buffers, n=1.</caption>
+    <thead>
+      <tr><th>Step</th><th>ms</th><th>% of pass</th><th>per doubling</th></tr>
+    </thead>
+    <tbody>
+      <tr class="total"><td>plan_allocation</td><td>336.85</td><td>100</td><td>1.95&times;</td></tr>
+      <tr><td>prepare_buffers</td><td>332.30</td><td>98.7</td><td>1.94&times;</td></tr>
+      <tr><td class="indent-1">collect_lx_relayout_plans</td><td>130.06</td><td>38.6</td><td>1.96&times;</td></tr>
+      <tr><td class="indent-1">generate_buffers</td><td>202.15</td><td>60.0</td><td>1.94&times;</td></tr>
+      <tr><td class="indent-2">residency_reasons</td><td>118.02</td><td>35.0</td><td>2.02&times;</td></tr>
+      <tr><td class="indent-2">everything else</td><td>84.13</td><td>25.0</td><td>~1.9&times;</td></tr>
+      <tr><td>solve</td><td>3.48</td><td>1.0</td><td><b>2.70&times;</b></td></tr>
+      <tr><td class="indent-1">plan_layout</td><td>3.47</td><td>1.0</td><td><b>2.71&times;</b></td></tr>
+    </tbody>
+  </table>
+
+  <div class="measure">
+    <p>Two things fall out. Eligibility determination &mdash; the twelve gates and the relayout search &mdash; is essentially all of the cost, and it is <strong>linear</strong> in buffer count. The packing is a rounding error but is the <strong>only superlinear</strong> term, and its exponent is climbing: 2.08&times;, then 2.25&times;, then 2.71&times; across successive doublings, converging toward the product of placeable buffers and transition ticks that the time-stepping loop rescans. At this scale it has four orders of magnitude to climb before it matters. It is nonetheless the term that will eventually bite.</p>
+  </div>
+
+  <div class="measure">
+    <h3>Who actually gets in</h3>
+    <p>The pass had no aggregate efficacy metric &mdash; only per-buffer debug logs &mdash; which for a pass whose whole value is residency is the one number missing. Adding a tally: at 768 operations, <b>512 of 768 buffers reside</b> and 256 are barred, with <b>99.6% of exclusions from a single gate</b>, splitting almost exactly in half between a K-split writer (128) and a broadcast read (127).</p>
+    <p>Neither half is an allocator-level opportunity. A K-split reduction leaves partial sums on most cores, so the data genuinely is not there to read; any remedy belongs to work division. A broadcast read is blocked on a capability the source names plainly &mdash; there is no single-base LX broadcast &mdash; so the only direction is a feature, replicating a shared buffer whole into every core&rsquo;s private LX. The gate is refusing to place data that either does not exist or cannot be addressed.</p>
+  </div>
+
+  <div class="callout">
+    <span class="ct">One result worth following up</span>
+    <p>On this workload the relayout search costs 39% of the pass and finds nothing. Turning it off with <code>SPYRE_LX_PLANNER_RELAYOUT=0</code> took the pass from 336.85&nbsp;ms to 214.70&nbsp;ms &mdash; a 36% reduction &mdash; with the residency gates and the solver unchanged and output identical.</p>
+    <p>That is not a bug and not yet an argument for changing anything: a workload where relayout <em>does</em> fire pays this search once and saves a reshuffle on every read. But it does mean the search runs unconditionally for the default greedy solver, and that its cost is paid whether or not any plan survives. Whether the trade is favorable is a question about workloads nobody has measured.</p>
+  </div>
+
+  <p class="scope"><b>Scope, and one correction.</b> Mechanism is from source and holds generally. The numbers are n=1 per point, no warmup discard, on a softmax-stack workload that is neither of the two families in the committed studies, against torch-spyre <code>faff191</code>. At 337&nbsp;ms and 128 buffers this sits two orders of magnitude below the regime where the pass&rsquo;s known n<sup>1.45</sup> scaling was observed, so nothing here confirms or refutes that slope.<br><br>Driving the solver directly on synthetic buffer sets since settles its scaling: it is <b>exactly quadratic</b>, converging on 4.00&times; per doubling and tracking the buffer&times;tick product to N=2048. But two controls refute the obvious explanations &mdash; live-set size costs only 1.85&times; for 64&times; more overlap, and ceiling pressure is non-monotonic. So the driver is purely the nested rescan, <i>not</i> the gap search over the live set, and the long-lived-carry topology this workload never produced would not have changed the answer. Quadratic with a small constant: ~1.1&nbsp;s extrapolated to N=4096, against real graphs that reach 128&ndash;770 buffers.</p>
+</section>
+
+<footer>
+  Source: torch_spyre/_inductor/scratchpad/{allocator,greedy_solver,plan_solver,lx_relayout}.py<br>
+  Measured on mwj-spyre-dev-pf &middot; torch 2.13.0+cpu &middot; layout_solver=greedy, co_optimizing=False, lx_planning=True, sencores=32
+</footer>
+
+</div>
