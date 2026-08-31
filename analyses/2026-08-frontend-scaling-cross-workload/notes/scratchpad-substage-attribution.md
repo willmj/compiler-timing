@@ -265,3 +265,94 @@ as-is for reduce compatibility and a `pass_index` meta field disambiguates.
 The residency histogram covers op-produced buffers only. Graph inputs go through
 `_input_residency_reason`, which is not wrapped — that is the small
 `n_barred` versus `n_spilled` discrepancy in the smaller samples.
+
+## 8. `optimize_restickify_locations` — the bookkeeping is the pass
+
+Follow-on dive, same harness and sweep. Instrument:
+[`restickify_beam_timing.py`](../patches/restickify_beam_timing.py), which wraps
+`beam_global_min_cost`, the two once-per-pass precomputations, `BeamState.__init__`
+and the three `cost` implementations. Wrapping `BeamState.__init__` is what yields
+the load-bearing counter: every expansion builds a state from a freshly
+concatenated tuple, so the length passed in *is* the per-expansion copy volume.
+
+Its wrappers fire once per expansion, so overhead is material and was measured
+rather than assumed: 15-24%, by running the same points with the shim gated off
+(`SPYRE_RESTICKIFY_TIMING=0`). Every time below is from the **shim-off** run, with
+only the negligible once-per-pass components and the bracketed `cost` time taken
+from the shim-on run. Bookkeeping is the derived residual.
+
+| ms (shim off) | 512 | 1024 | 2048 | 4096 | 8192 | exp | exp(1024+) |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| **pass total** | 518.9 | 1365.5 | 3884.9 | 11918.7 | **38852.8** | 1.57 | 1.62 |
+| `future_min_cost` (DP) | 466.4 | 933.2 | 1865.2 | 3914.7 | 7532.0 | **1.01** | 1.01 |
+| `cost_fn.cost` | 58.3 | 351.2 | 1021.1 | 2643.8 | 6047.0 | 1.69 | 1.38 |
+| `_reorder_any_in_nodes` | 4.3 | 12.4 | 39.8 | 176.4 | 682.0 | 1.85 | 1.94 |
+| `_compute_last_use` | 0.1 | 0.1 | 0.2 | 0.6 | 1.9 | — | — |
+| **bookkeeping** (derived) | ~0 | 68.7 | 958.5 | 5183.2 | **24589.9** | — | **2.85** |
+| bookkeeping share | — | 5.0% | 24.7% | 43.5% | **63.3%** | | |
+
+**The pass is bookkeeping.** At the smallest point it is ~90% backward-DP and
+bookkeeping is nil; by the largest it is 63% bookkeeping growing at exponent
+2.85, and that crossover *is* the pass's 1.57.
+
+### Mechanism, confirmed
+
+`BeamState.assignments` is a tuple parallel to the frontier's buf_names, so its
+length is the index of the op being processed. Three places pay O(index) per
+state per op in `beam_global_min_cost`:
+
+1. **expansion** -- `state.assignments + (candidate_stl,)`, a full copy per
+   state x candidate;
+2. **merge key** -- a second full-length tuple per expanded state, then hashed
+   into the `canon` dict (so it also pays `SpyreTensorLayout.__hash__` per slot);
+3. **`live_indices`** -- a scan of all buf_names, once per op.
+
+Predicted before measuring (in the patch docstring): cost tracks
+`sum over expansions of len(assignments)`, not the expansion count. It does:
+
+| | 512 | 1024 | 2048 | 4096 | 8192 | exp |
+|---|---:|---:|---:|---:|---:|---:|
+| expansions | 4,700 | 27,090 | 81,462 | 190,262 | 407,862 | 1.63 |
+| copy volume (elements) | 439,022 | 4,385,625 | 23,825,377 | 103,838,113 | 428,369,185 | **2.51** |
+| ns per expansion | — | 2,536 | 11,766 | 27,242 | 60,290 | rises 24x |
+| ns per copied element | — | 15.7 | 40.2 | 49.9 | 57.4 | rises 3.7x |
+
+Per-expansion cost rises 24x; per-element cost rises 3.7x. So volume is the
+primary driver and the expansion-count model is dead -- but volume alone does not
+fully explain it either. The residual 3.7x is most likely allocation and GC
+pressure (428M tuple slots churned at the largest point) plus the layout hashing
+in the merge key. Attributing that split needs in-function timers, which is the
+one thing this indirect instrumentation cannot do.
+
+### Two hypotheses refuted
+
+- **The DP is linear (1.01), not the problem.** `compute_future_min_cost` has four
+  nested loops and its `min_input_cost` call count is proportional to total
+  consumer edges, so fan-out growth in a tiled graph looked like a candidate. It
+  is not: 1.01 across the whole range. It does dominate *small* graphs (90% at
+  Lk=512), which is worth knowing but is not a scaling problem.
+- **Trimming and cost evaluation are not the problem.** `Frontier.trim` is 1.5 ms
+  total at the baseline; `cost_fn.cost` is 15.6% at the largest point with
+  exponent 1.38. The beam is saturated from Lk=1024 on (600 states in, 200 out),
+  so the state count is bounded and only the per-state work grows.
+
+### The fix, and the one number that sizes it
+
+**During the search only live slots are ever read.** `Frontier.input_stl` is
+called only for deps of the op being processed, which are live by definition, and
+the merge key explicitly nulls dead slots. Dead slots matter only for the final
+commit. So a state needs a small live-slot map, copied at O(live), plus a parent
+pointer for history walked once at the end -- turning both the expansion copy and
+the merge key from O(index) to O(live).
+
+Projected, if the live-slot count is bounded: bookkeeping collapses and the pass
+at Lk=8192 goes from 38.9 s to roughly DP 7.5 + cost 6.0 + reorder 0.7 + small,
+around 15 s, with the exponent falling from 1.62 toward ~1.1.
+
+**That projection is not measured.** `len(live_indices)` is computed inline and
+this instrumentation cannot see it, so the win could be much smaller if liveness
+in a tiled flash-attention graph is broad. Counting it is a small anchored source
+patch plus two runs, and it is the next thing to measure -- before any prototype.
+
+Secondary: `_reorder_any_in_nodes` is exponent 1.94 at 682 ms (1.8%). Small now,
+quadratic, worth a look once the main term is gone.

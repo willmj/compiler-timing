@@ -349,15 +349,19 @@ def _install_level1(alloc_mod: Any) -> None:
         if orig_prepare is None:
             continue
 
-        @functools.wraps(orig_prepare)
-        def _timed_prepare(self: Any, graph: Any, _orig: Any = orig_prepare) -> Any:
-            with _tr.stage("scratchpad:prepare_buffers") as ev:
-                _meta(ev, n_ops=_count(graph, "operations"))
-                buffers = _orig(self, graph)
-                _meta(ev, n_buffers=_count(buffers))
-                return buffers
+        def _make_prepare(_orig: Any) -> Any:
+            @functools.wraps(_orig)
+            def _timed_prepare(self: Any, *a: Any, **k: Any) -> Any:
+                graph = a[0] if a else k.get("graph")
+                with _tr.stage("scratchpad:prepare_buffers") as ev:
+                    _meta(ev, n_ops=_count(graph, "operations"))
+                    buffers = _orig(self, *a, **k)
+                    _meta(ev, n_buffers=_count(buffers))
+                    return buffers
 
-        cls._prepare_buffers = _timed_prepare
+            return _timed_prepare
+
+        cls._prepare_buffers = _make_prepare(orig_prepare)
 
     orig_build = _claim(base, "_build_solver", required=True)
     if orig_build is not None:
@@ -377,26 +381,34 @@ def _install_level1(alloc_mod: Any) -> None:
         if orig_solve is None:
             continue
 
-        @functools.wraps(orig_solve)
-        def _timed_solve(self: Any, solver: Any, _orig: Any = orig_solve) -> Any:
-            with _tr.stage("scratchpad:solve") as ev:
-                _meta(
-                    ev,
-                    n_buffers=_count(solver, "buffers"),
-                    solver_class=type(solver).__name__,
-                )
-                allocation = _orig(self, solver)
-                # The placement rate is the pass's efficacy metric: everything
-                # else here measures how long it took to decide, not what it
-                # achieved.
-                try:
-                    placed = sum(1 for b in allocation if b.address is not None)
-                    _meta(ev, n_placed=placed, n_spilled=len(allocation) - placed)
-                except Exception:
-                    pass
-                return allocation
+        def _make_solve(_orig: Any) -> Any:
+            @functools.wraps(_orig)
+            def _timed_solve(self: Any, *a: Any, **k: Any) -> Any:
+                solver = a[0] if a else k.get("solver")
+                with _tr.stage("scratchpad:solve") as ev:
+                    _meta(
+                        ev,
+                        n_buffers=_count(solver, "buffers"),
+                        solver_class=type(solver).__name__,
+                    )
+                    allocation = _orig(self, *a, **k)
+                    # The placement rate is the pass's efficacy metric:
+                    # everything else here measures how long it took to
+                    # decide, not what it achieved.
+                    try:
+                        placed = sum(
+                            1 for b in allocation if b.address is not None
+                        )
+                        _meta(
+                            ev, n_placed=placed, n_spilled=len(allocation) - placed
+                        )
+                    except Exception:
+                        pass
+                    return allocation
 
-        cls._solve = _timed_solve
+            return _timed_solve
+
+        cls._solve = _make_solve(orig_solve)
 
     _simple_stage(
         base,
@@ -579,37 +591,37 @@ def _install_level3() -> None:
         orig_allocate = _claim(cls, "_try_allocate", required=required)
         if orig_allocate is not None:
 
-            @functools.wraps(orig_allocate)
-            def _counting_allocate(
-                self: Any, buffer: Any, _orig: Any = orig_allocate
-            ) -> Any:
+            def _make_allocate(_orig: Any) -> Any:
+              @functools.wraps(_orig)
+              def _counting_allocate(self: Any, *a: Any, **k: Any) -> Any:
                 live = _count(self, "usage")
                 if live is not None:
                     _SOLVER.observe_live(live)
                 t0 = time.perf_counter_ns()
                 try:
-                    return _orig(self, buffer)
+                    return _orig(self, *a, **k)
                 finally:
                     _SOLVER.try_allocate_ns += time.perf_counter_ns() - t0
                     _SOLVER.try_allocate_calls += 1
+              return _counting_allocate
 
-            cls._try_allocate = _counting_allocate
+            cls._try_allocate = _make_allocate(orig_allocate)
 
         orig_deallocate = _claim(cls, "_try_deallocate", required=required)
         if orig_deallocate is not None:
 
-            @functools.wraps(orig_deallocate)
-            def _counting_deallocate(
-                self: Any, bufs: Any, _orig: Any = orig_deallocate
-            ) -> Any:
+            def _make_deallocate(_orig: Any) -> Any:
+              @functools.wraps(_orig)
+              def _counting_deallocate(self: Any, *a: Any, **k: Any) -> Any:
                 t0 = time.perf_counter_ns()
                 try:
-                    return _orig(self, bufs)
+                    return _orig(self, *a, **k)
                 finally:
                     _SOLVER.try_deallocate_ns += time.perf_counter_ns() - t0
                     _SOLVER.try_deallocate_calls += 1
+              return _counting_deallocate
 
-            cls._try_deallocate = _counting_deallocate
+            cls._try_deallocate = _make_deallocate(orig_deallocate)
 
 
 # ---------------------------------------------------------------------------

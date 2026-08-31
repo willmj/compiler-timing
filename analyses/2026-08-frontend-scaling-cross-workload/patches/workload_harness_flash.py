@@ -31,6 +31,7 @@ sys.modules["torch_spyre._inductor.timing_recorder"] = _tr
 _si.timing_recorder = _tr
 
 import pass_pipeline_timing as ppt
+import restickify_beam_timing as rbt
 import scratchpad_substage_timing as sst
 
 
@@ -104,10 +105,14 @@ def main():
 
     sp = sst.install()
     pp = ppt.install()
+    # Gate so the shim's own overhead can be measured against the same tree:
+    # its wrappers fire once per expansion and once per cost evaluation.
+    rb = rbt.install() if os.environ.get("SPYRE_RESTICKIFY_TIMING", "1") == "1" else rbt._Report()
     print(
         f"armed: scratchpad level {sp.level} ({len(sp.wrapped)} wraps, "
         f"{len(sp.missing_required)} missing) | "
-        f"pipelines {len(pp['wrapped'])} wrapped, {len(pp['missing'])} missing",
+        f"pipelines {len(pp['wrapped'])} wrapped, {len(pp['missing'])} missing | "
+        f"restickify {len(rb.wrapped)} wrapped, {len(rb.missing)} missing",
         flush=True,
     )
 
