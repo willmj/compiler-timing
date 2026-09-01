@@ -60,7 +60,7 @@ def install() -> bool:
     cache: dict[Any, Any] = {}
 
     @functools.wraps(orig_dc)
-    def _memo_dc(stl, dep, indirect_sizes):
+    def _memo_dc(stl, dep, indirect_sizes, *a, **k):
         stats["calls"] += 1
         try:
             isz = (
@@ -71,13 +71,13 @@ def install() -> bool:
             key = (stl, dep, isz)
         except TypeError:
             stats["uncacheable"] += 1
-            return orig_dc(stl, dep, indirect_sizes)
+            return orig_dc(stl, dep, indirect_sizes, *a, **k)
         got = cache.get(key, _MISS)
         if got is _MISS:
             stats["misses"] += 1
             # An unrepresentable stick expression raises; leave it uncached so
             # the raising path stays identical rather than caching an exception.
-            got = orig_dc(stl, dep, indirect_sizes)
+            got = orig_dc(stl, dep, indirect_sizes, *a, **k)
             cache[key] = got
             if len(cache) > stats["max_entries"]:
                 stats["max_entries"] = len(cache)

@@ -393,7 +393,7 @@ def _install_repetition_probes() -> None:
     if orig_crn is not None and not getattr(orig_crn, "_spyre_probed", False):
 
         @functools.wraps(orig_crn)
-        def _probed_crn(in_stl, in_host, in_dep, out_stl, out_dep, op=None):
+        def _probed_crn(in_stl, in_host, in_dep, out_stl, out_dep, op=None, *a, **k):
             _C.crn_calls += 1
             try:
                 _C.crn_keys.add(
@@ -408,7 +408,7 @@ def _install_repetition_probes() -> None:
                 )
             except Exception:
                 _C.crn_unhashable += 1
-            return orig_crn(in_stl, in_host, in_dep, out_stl, out_dep, op)
+            return orig_crn(in_stl, in_host, in_dep, out_stl, out_dep, op, *a, **k)
 
         _probed_crn._spyre_probed = True  # type: ignore[attr-defined]
         om.compute_restickify_needed = _probed_crn
@@ -418,7 +418,7 @@ def _install_repetition_probes() -> None:
     if orig_dc is not None and not getattr(orig_dc, "_spyre_probed", False):
 
         @functools.wraps(orig_dc)
-        def _probed_dc(stl, dep, indirect_sizes):
+        def _probed_dc(stl, dep, indirect_sizes, *a, **k):
             _C.dc_calls += 1
             try:
                 isz = (
@@ -429,7 +429,7 @@ def _install_repetition_probes() -> None:
                 _C.dc_keys.add((_key(stl), _key(dep), isz))
             except Exception:
                 _C.dc_unhashable += 1
-            return orig_dc(stl, dep, indirect_sizes)
+            return orig_dc(stl, dep, indirect_sizes, *a, **k)
 
         _probed_dc._spyre_probed = True  # type: ignore[attr-defined]
         pu.device_coordinates = _probed_dc
