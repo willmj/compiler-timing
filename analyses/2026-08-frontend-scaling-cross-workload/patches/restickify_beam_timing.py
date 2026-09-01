@@ -80,6 +80,13 @@ class _BeamCounters:
     # compute_restickify_needed per (in_stl, target_stl) for ONE op-input edge,
     # so these counts ask a different question: how much of the work recurs
     # across edges, where that cache cannot see it.
+    # Beam-width experiment: does BEAM_WIDTH=200 buy any solution quality?
+    beam_width: int = 0
+    best_cost: float = -1.0
+    max_states_after_trim: int = 0
+    states_into_trim_sum: int = 0
+    states_after_trim_sum: int = 0
+
     crn_calls: int = 0
     crn_keys: set = field(default_factory=set)
     crn_unhashable: int = 0
@@ -134,6 +141,11 @@ class _BeamCounters:
             "trim_ms": self.trim_ns / 1e6,
             "trim_states_in_max": self.trim_states_in_max,
             "n_ops_with_layouts": self.add_buf_calls,
+            "beam_width": self.beam_width,
+            "best_cost": self.best_cost,
+            "max_states_after_trim": self.max_states_after_trim,
+            "states_into_trim_sum": self.states_into_trim_sum,
+            "states_after_trim_sum": self.states_after_trim_sum,
             "crn_calls": self.crn_calls,
             "crn_distinct": len(self.crn_keys),
             "crn_unhashable": self.crn_unhashable,
@@ -207,6 +219,13 @@ def install() -> _Report:
                 @functools.wraps(_orig)
                 def _timed_beam(*a: Any, **k: Any) -> Any:
                     _C.reset()
+                    # After reset, not at install: reset() restores defaults.
+                    try:
+                        from torch_spyre._inductor import optimize_restickify as _om
+
+                        _C.beam_width = int(_om.BEAM_WIDTH)
+                    except Exception:
+                        pass
                     # Diagnostic only: attribute the expansion loop, which the
                     # counters show is ~75% of the beam and is not the cost
                     # evaluation, the trim, or the assignment-tuple copy.
@@ -332,6 +351,7 @@ def install() -> _Report:
         cls.cost = _timed_cost
         _REPORT.wrapped.append(f"optimize_restickify.{cls_name}.cost")
 
+    _install_beam_width_experiment()
     _install_repetition_probes()
     _tr.set_run_meta(restickify_beam_timing=_REPORT.as_meta())
     if _REPORT.missing:
@@ -414,5 +434,64 @@ def _install_repetition_probes() -> None:
         _probed_dc._spyre_probed = True  # type: ignore[attr-defined]
         pu.device_coordinates = _probed_dc
         _REPORT.wrapped.append("pass_utils.device_coordinates (probe)")
+
+
+def _install_beam_width_experiment() -> None:
+    """Override BEAM_WIDTH and record the solution quality it produces.
+
+    `Frontier(BEAM_WIDTH)` reads the module global when the search starts, so
+    the width is settable from outside. `frontier.best().cost` is the committed
+    solution's actual cost (future estimates are zero at the end), which is the
+    quality number a narrower beam has to preserve to be free.
+    """
+    from torch_spyre._inductor import optimize_restickify as om
+
+    width = os.environ.get("SPYRE_RESTICKIFY_BEAM_WIDTH")
+    if width:
+        try:
+            om.BEAM_WIDTH = int(width)
+            _REPORT.wrapped.append(f"optimize_restickify.BEAM_WIDTH := {width}")
+        except ValueError:
+            raise ValueError(f"SPYRE_RESTICKIFY_BEAM_WIDTH={width!r} is not an integer")
+    _C.beam_width = getattr(om, "BEAM_WIDTH", -1)
+
+    cls = getattr(om, "Frontier", None)
+    if cls is None:
+        _REPORT.missing.append("optimize_restickify.Frontier")
+        return
+
+    orig_best = cls.__dict__.get("best")
+    if orig_best is not None and not getattr(orig_best, "_spyre_probed", False):
+
+        @functools.wraps(orig_best)
+        def _probed_best(self):
+            out = orig_best(self)
+            try:
+                _C.best_cost = float(out.cost)
+            except Exception:
+                pass
+            return out
+
+        _probed_best._spyre_probed = True  # type: ignore[attr-defined]
+        cls.best = _probed_best
+        _REPORT.wrapped.append("optimize_restickify.Frontier.best")
+
+    orig_trim = cls.__dict__.get("trim")
+    if orig_trim is not None and not getattr(orig_trim, "_spyre_trimmed", False):
+
+        @functools.wraps(orig_trim)
+        def _probed_trim(self):
+            n_in = len(self.states)
+            _C.states_into_trim_sum += n_in
+            out = orig_trim(self)
+            n_out = len(self.states)
+            _C.states_after_trim_sum += n_out
+            if n_out > _C.max_states_after_trim:
+                _C.max_states_after_trim = n_out
+            return out
+
+        _probed_trim._spyre_trimmed = True  # type: ignore[attr-defined]
+        cls.trim = _probed_trim
+        _REPORT.wrapped.append("optimize_restickify.Frontier.trim (width probe)")
 
 __all__ = ["install"]

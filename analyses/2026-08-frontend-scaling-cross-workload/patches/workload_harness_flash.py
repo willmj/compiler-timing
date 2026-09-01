@@ -32,6 +32,7 @@ _si.timing_recorder = _tr
 
 import pass_pipeline_timing as ppt
 import restickify_devcoord_memo as rdm
+import restickify_beam_width as rbw
 import restickify_beam_timing as rbt
 import scratchpad_substage_timing as sst
 
@@ -107,6 +108,8 @@ def main():
     sp = sst.install()
     pp = ppt.install()
     memo_on = rdm.install()
+    width_on = rbw.install()
+    print(f"beam width override: {width_on}", flush=True)
     print(f"devcoord memo: {memo_on}", flush=True)
     # Gate so the shim's own overhead can be measured against the same tree:
     # its wrappers fire once per expansion and once per cost evaluation.

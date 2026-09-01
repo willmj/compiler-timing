@@ -40,6 +40,7 @@ _si.timing_recorder = _tr
 
 import pass_pipeline_timing as ppt
 import scratchpad_substage_timing as sst
+import restickify_beam_timing as rbt
 
 
 def build_chain(depth):
@@ -64,9 +65,29 @@ def build_fanin(width):
     return fn
 
 
+def build_conflict(n):
+    """Two consumers of one buffer reducing over DIFFERENT axes.
+
+    sum(-1) and sum(-2) want different stick dimensions on the same producer
+    output, so one of them cannot read it as laid out. That is the case the beam
+    exists for: a nonzero-cost assignment where a narrower frontier could pick a
+    worse layout than a wider one. The zero-cost workloads cannot test that.
+    """
+
+    def fn(x, w):
+        acc = None
+        for i in range(n):
+            a = (x @ w) * (1.0 + 0.01 * i)
+            t = a.sum(dim=-1) + a.sum(dim=-2)
+            acc = t if acc is None else acc + t
+        return acc
+
+    return fn
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--topology", choices=("chain", "fanin"), default="fanin")
+    ap.add_argument("--topology", choices=("chain", "fanin", "conflict"), default="fanin")
     ap.add_argument("--n", type=int, default=8, help="depth for chain, width for fanin")
     ap.add_argument("--dim", type=int, default=512)
     ap.add_argument("--out", required=True)
@@ -75,6 +96,7 @@ def main():
 
     sp = sst.install()
     pp = ppt.install()
+    rb = rbt.install()
     print(
         f"armed: scratchpad level {sp.level} ({len(sp.wrapped)} wraps, "
         f"{len(sp.missing_required)} missing) | "
@@ -86,7 +108,11 @@ def main():
     # Spyre has no fp32 batchmatmul; fp16 is the supported device dtype.
     x_cpu = torch.randn(args.dim, args.dim, dtype=torch.float16)
     w_cpu = (torch.randn(args.dim, args.dim, dtype=torch.float32) * 0.05).half()
-    fn = build_chain(args.n) if args.topology == "chain" else build_fanin(args.n)
+    fn = {
+        "chain": build_chain,
+        "fanin": build_fanin,
+        "conflict": build_conflict,
+    }[args.topology](args.n)
 
     with _tr.stage("device_init_and_transfer"):
         x = x_cpu.to("spyre")
