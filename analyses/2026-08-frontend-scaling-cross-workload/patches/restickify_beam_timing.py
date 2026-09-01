@@ -39,6 +39,7 @@ Gated on TORCH_SPYRE_TIMING=1 via timing_recorder.
 from __future__ import annotations
 
 import functools
+import os
 import sys
 import time
 from dataclasses import dataclass, field
@@ -64,8 +65,63 @@ class _BeamCounters:
     trim_states_in_max: int = 0
     add_buf_calls: int = 0
 
+    # Inputs for reconstructing `live_indices` without patching the function:
+    # buf_names in add_buf order, the last_use map, the graph input names, and
+    # per-entry expansion counts attributed to the most recent add_buf.
+    buf_order: list = field(default_factory=list)
+    states_per_entry: list = field(default_factory=list)
+    last_use: dict = field(default_factory=dict)
+    input_names: set = field(default_factory=set)
+    live_len_sum: int = 0
+    live_max: int = 0
+    live_at_last_op: int = 0
+
+    # Cross-op repetition probe. EdgeCostMap already memoizes
+    # compute_restickify_needed per (in_stl, target_stl) for ONE op-input edge,
+    # so these counts ask a different question: how much of the work recurs
+    # across edges, where that cache cannot see it.
+    crn_calls: int = 0
+    crn_keys: set = field(default_factory=set)
+    crn_unhashable: int = 0
+    dc_calls: int = 0
+    dc_keys: set = field(default_factory=set)
+    dc_unhashable: int = 0
+
     def reset(self) -> None:
         self.__init__()  # type: ignore[misc]
+
+    def note_state(self, n: int) -> None:
+        self.n_states_built += 1
+        self.assign_len_sum += n
+        if n > self.assign_len_max:
+            self.assign_len_max = n
+        if self.states_per_entry:
+            self.states_per_entry[-1] += 1
+
+    def compute_liveness(self) -> None:
+        """Reconstruct what `live_indices` would have counted, per op.
+
+        `live_indices` keeps slot i when `last_use[buf_names[i]] > current_step`.
+        current_step advances once per op with layouts, which are exactly the
+        buf_order entries that are not graph inputs, in order. So the whole
+        curve is recoverable from what the wrappers already saw.
+        """
+        import bisect
+
+        seen: list[int] = []  # last_use values of entries so far, sorted
+        step = -1
+        for idx, name in enumerate(self.buf_order):
+            bisect.insort(seen, self.last_use.get(name, -1))
+            if name in self.input_names:
+                continue
+            step += 1
+            # entries whose last use is strictly after this step are live
+            live = len(seen) - bisect.bisect_right(seen, step)
+            if live > self.live_max:
+                self.live_max = live
+            self.live_at_last_op = live
+            if idx < len(self.states_per_entry):
+                self.live_len_sum += self.states_per_entry[idx] * live
 
     def as_meta(self) -> dict[str, Any]:
         return {
@@ -78,6 +134,27 @@ class _BeamCounters:
             "trim_ms": self.trim_ns / 1e6,
             "trim_states_in_max": self.trim_states_in_max,
             "n_ops_with_layouts": self.add_buf_calls,
+            "crn_calls": self.crn_calls,
+            "crn_distinct": len(self.crn_keys),
+            "crn_unhashable": self.crn_unhashable,
+            "crn_reuse_factor": (
+                self.crn_calls / len(self.crn_keys) if self.crn_keys else None
+            ),
+            "dc_calls": self.dc_calls,
+            "dc_distinct": len(self.dc_keys),
+            "dc_unhashable": self.dc_unhashable,
+            "dc_reuse_factor": (
+                self.dc_calls / len(self.dc_keys) if self.dc_keys else None
+            ),
+            "live_len_sum": self.live_len_sum,
+            "live_max": self.live_max,
+            "live_at_last_op": self.live_at_last_op,
+            # What switching to live-slot-only state would save on volume.
+            "volume_ratio": (
+                self.assign_len_sum / self.live_len_sum
+                if self.live_len_sum
+                else None
+            ),
         }
 
 
@@ -130,10 +207,43 @@ def install() -> _Report:
                 @functools.wraps(_orig)
                 def _timed_beam(*a: Any, **k: Any) -> Any:
                     _C.reset()
+                    # Diagnostic only: attribute the expansion loop, which the
+                    # counters show is ~75% of the beam and is not the cost
+                    # evaluation, the trim, or the assignment-tuple copy.
+                    if os.environ.get("SPYRE_RESTICKIFY_PROFILE") == "1":
+                        import cProfile
+                        import pstats
+
+                        prof = cProfile.Profile()
+                        prof.enable()
+                        try:
+                            return _orig(*a, **k)
+                        finally:
+                            prof.disable()
+                            out = os.environ.get(
+                                "SPYRE_RESTICKIFY_PROFILE_OUT", "/tmp/beam_profile.txt"
+                            )
+                            with open(out, "w") as fh:
+                                st = pstats.Stats(prof, stream=fh)
+                                st.sort_stats("tottime").print_stats(30)
+                            print(f"beam profile -> {out}", flush=True)
+                    try:
+                        from torch._inductor.virtualized import V
+
+                        _C.input_names = set(V.graph.graph_input_names)
+                    except Exception:
+                        pass
                     with _tr.stage("restickify:beam") as ev:
                         try:
                             return _orig(*a, **k)
                         finally:
+                            # Reconstruction is O(N log N) and runs once, after
+                            # the search; it inflates this event, which is why
+                            # reported times come from the shim-off arm.
+                            try:
+                                _C.compute_liveness()
+                            except Exception:
+                                pass
                             _meta(ev, **_C.as_meta())
 
                 return _timed_beam
@@ -144,7 +254,10 @@ def install() -> _Report:
             @functools.wraps(orig)
             def _timed(*a: Any, _orig: Any = orig, _event: str = event, **k: Any) -> Any:
                 with _tr.stage(_event):
-                    return _orig(*a, **k)
+                    out = _orig(*a, **k)
+                    if _event == "restickify:last_use" and isinstance(out, dict):
+                        _C.last_use = out
+                    return out
 
             setattr(orl, fn_name, _timed)
         _REPORT.wrapped.append(f"optimize_restickify.{fn_name}")
@@ -160,11 +273,7 @@ def install() -> _Report:
 
         @functools.wraps(orig_init)
         def _counting_init(self: Any, assignments: Any, *a: Any, **k: Any) -> Any:
-            n = len(assignments)
-            _C.n_states_built += 1
-            _C.assign_len_sum += n
-            if n > _C.assign_len_max:
-                _C.assign_len_max = n
+            _C.note_state(len(assignments))
             return orig_init(self, assignments, *a, **k)
 
         state_cls.__init__ = _counting_init
@@ -194,9 +303,11 @@ def install() -> _Report:
         orig_add_buf = frontier_cls.add_buf
 
         @functools.wraps(orig_add_buf)
-        def _counting_add_buf(self: Any, name: str) -> Any:
+        def _counting_add_buf(self: Any, name: str, *a: Any, **k: Any) -> Any:
             _C.add_buf_calls += 1
-            return orig_add_buf(self, name)
+            _C.buf_order.append(name)
+            _C.states_per_entry.append(0)
+            return orig_add_buf(self, name, *a, **k)
 
         frontier_cls.add_buf = _counting_add_buf
         _REPORT.wrapped.append("optimize_restickify.Frontier.add_buf")
@@ -221,6 +332,7 @@ def install() -> _Report:
         cls.cost = _timed_cost
         _REPORT.wrapped.append(f"optimize_restickify.{cls_name}.cost")
 
+    _install_repetition_probes()
     _tr.set_run_meta(restickify_beam_timing=_REPORT.as_meta())
     if _REPORT.missing:
         print(
@@ -230,5 +342,77 @@ def install() -> _Report:
         )
     return _REPORT
 
+
+
+def _key(obj: Any) -> Any:
+    """Hashable stand-in for a call argument.
+
+    Layouts and MemoryDeps are hashable (EdgeCostMap uses layouts as dict
+    keys); FixedLayout and dicts may not be, and repr is a sound fallback for
+    a distinctness count since equal reprs here imply equal structure.
+    """
+    try:
+        hash(obj)
+        return obj
+    except TypeError:
+        return repr(obj)
+
+
+def _install_repetition_probes() -> None:
+    """Count calls versus distinct arguments for the two profile hotspots.
+
+    EdgeCostMap already memoizes compute_restickify_needed per
+    (in_stl, target_stl) for ONE op-input edge. These counts ask the different
+    question of how much work recurs ACROSS edges, where that cache cannot see
+    it -- which is what decides whether a wider memo is worth prototyping.
+    """
+    from torch_spyre._inductor import optimize_restickify as om
+    from torch_spyre._inductor import pass_utils as pu
+
+    orig_crn = getattr(om, "compute_restickify_needed", None)
+    if orig_crn is not None and not getattr(orig_crn, "_spyre_probed", False):
+
+        @functools.wraps(orig_crn)
+        def _probed_crn(in_stl, in_host, in_dep, out_stl, out_dep, op=None):
+            _C.crn_calls += 1
+            try:
+                _C.crn_keys.add(
+                    (
+                        _key(in_stl),
+                        _key(in_host),
+                        _key(in_dep),
+                        _key(out_stl),
+                        _key(out_dep),
+                        getattr(op, "name", None),
+                    )
+                )
+            except Exception:
+                _C.crn_unhashable += 1
+            return orig_crn(in_stl, in_host, in_dep, out_stl, out_dep, op)
+
+        _probed_crn._spyre_probed = True  # type: ignore[attr-defined]
+        om.compute_restickify_needed = _probed_crn
+        _REPORT.wrapped.append("optimize_restickify.compute_restickify_needed (probe)")
+
+    orig_dc = getattr(pu, "device_coordinates", None)
+    if orig_dc is not None and not getattr(orig_dc, "_spyre_probed", False):
+
+        @functools.wraps(orig_dc)
+        def _probed_dc(stl, dep, indirect_sizes):
+            _C.dc_calls += 1
+            try:
+                isz = (
+                    None
+                    if indirect_sizes is None
+                    else frozenset((_key(k), v) for k, v in indirect_sizes.items())
+                )
+                _C.dc_keys.add((_key(stl), _key(dep), isz))
+            except Exception:
+                _C.dc_unhashable += 1
+            return orig_dc(stl, dep, indirect_sizes)
+
+        _probed_dc._spyre_probed = True  # type: ignore[attr-defined]
+        pu.device_coordinates = _probed_dc
+        _REPORT.wrapped.append("pass_utils.device_coordinates (probe)")
 
 __all__ = ["install"]

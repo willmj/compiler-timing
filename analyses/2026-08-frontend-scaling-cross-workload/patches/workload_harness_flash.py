@@ -31,6 +31,7 @@ sys.modules["torch_spyre._inductor.timing_recorder"] = _tr
 _si.timing_recorder = _tr
 
 import pass_pipeline_timing as ppt
+import restickify_devcoord_memo as rdm
 import restickify_beam_timing as rbt
 import scratchpad_substage_timing as sst
 
@@ -105,6 +106,8 @@ def main():
 
     sp = sst.install()
     pp = ppt.install()
+    memo_on = rdm.install()
+    print(f"devcoord memo: {memo_on}", flush=True)
     # Gate so the shim's own overhead can be measured against the same tree:
     # its wrappers fire once per expansion and once per cost evaluation.
     rb = rbt.install() if os.environ.get("SPYRE_RESTICKIFY_TIMING", "1") == "1" else rbt._Report()
