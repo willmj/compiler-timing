@@ -1,7 +1,7 @@
 # Draft PR — share one `device_coordinates` memo across layout selection
 
-Branch: `restickify/devcoord-memo` (local only, off `upstream/main` @ `0db21d2`).
-Two files, +85/-5. **Not pushed.**
+Branch: `restickify/devcoord-memo`, rebased onto `upstream/main` @ `ff23e62`.
+Two files, +85/-5.
 
 Title: `perf(restickify): share one device_coordinates memo across layout selection`
 
@@ -45,12 +45,28 @@ cache[key] = coords
 return list(coords)
 ```
 
-Measured on tiled flash attention, Lq=512, cold compiles, matched arms:
+A second commit hoists two more per-edge invariants out of the same candidate
+loop: `indirect_info_from_op` (per op, into the same memo) and
+`host_coordinates` (per edge, into a lazy slot on EdgeCostMap). See
+*Three mechanisms* below for why they take different homes.
 
-| point   | before (ms) | after (ms) | delta |
-|---------|------------:|-----------:|------:|
-| Lk=2048 |        4946 |       3544 | **-28.3%** |
-| Lk=8192 |       44628 |      38459 | **-13.8%** |
+Measured on tiled flash attention, Lq=512, cold compiles. Three arms on one
+isolated checkout of `ff23e62` with one `_C.so`, patches applied in turn, so
+each mechanism keeps its own number:
+
+| point   | base | +memo | +memo+hoists |
+|---------|-----:|------:|-------------:|
+| Lk=2048 | 1991 | 1098 (**-44.9%**) | 583 (**-70.7%**) |
+| Lk=8192 | 8771 | 4714 (**-46.2%**) | 2693 (**-69.3%**) |
+
+The hoists contribute a further -46.9% / -42.9% on top of the memo.
+
+Pipeline and whole-compile totals are deliberately not quoted. One run in this
+batch hit a storage stall that inflated `_maybe_scratchpad_planning` to 127 s
+against 14-15 s in its sibling arms, and that pass is separately
+nondeterministic across processes (#4196). Every other pass matches across arms
+to within a few ms and `optimize_restickify_locations` is clean in all six runs,
+so the pass-level deltas above are the claim.
 
 ## How this was found
 
@@ -96,11 +112,44 @@ the two, total calls versus distinct argument sets:
 | `compute_restickify_needed` | 2,577 | 2,577 | **1.00x** |
 | `device_coordinates` | 5,154 | 1,126 | **4.58x** |
 
+Re-measured on `ff23e62` after #4176 changed restickify: unchanged at 4.55x
+(Lk=1024) and 4.58x (Lk=2048), with `compute_restickify_needed` still exactly
+1.00x.
+
 `compute_restickify_needed` has **zero** cross-edge repetition — `EdgeCostMap`
 is already tight, and widening it would gain nothing. One level down, 78% of
 calls recompute a known result, and the ratio is stable across graph sizes, so
 it is a constant-factor win that holds as graphs grow. That is the whole basis
 for this change.
+
+## Three mechanisms, and why they sit where they do
+
+`compute_restickify_needed` runs once per (in_stl, target_stl) pair per edge.
+Three things it recomputes on every call do not need to be:
+
+| | varies with | home | reuse |
+|---|---|---|---|
+| `device_coordinates` | in_stl / out_stl | shared search-scoped memo | 4.6x |
+| `indirect_info_from_op` | op only | same shared memo, keyed per op | 5.2x |
+| `host_coordinates` | edge, plus indirect sizes | lazy slot on EdgeCostMap | 3.7x |
+
+Only `device_coordinates` needs cross-edge sharing -- its key includes the
+candidate layouts, so no per-edge or per-op scope reaches that 4.6x. That is
+what the install/detach buys; the other two then ride on machinery that already
+exists.
+
+`host_coordinates` derives only from `_dep_layout` and `dep`, already
+construction-time snapshots on EdgeCostMap, so a slot there adds no staleness
+surface the class does not already carry. It fills on first use, so an edge
+whose candidate pairs all take the stick-compatible early-out never pays for it.
+
+`indirect_info_from_op` is per-op invariant during the search but is
+deliberately NOT snapshotted at construction. `get_read_writes` reaches input
+buffer layouts through `make_indexer`, and `propagate_spyre_tensor_layouts` --
+the pass that builds these edge maps -- rebinds buffer layouts while it runs,
+interleaved with that construction, so a captured value could predate a
+rebinding. Computing it on first use during layout selection avoids the question
+entirely. It is also why it goes in the shared memo rather than in `from_args`.
 
 ## Special notes for your reviewer
 
@@ -124,17 +173,25 @@ dimension, so the copy is a few elements against 0.8 ms of avoided sympy.
 these functions passes nothing and takes the same path plus one `is not None`
 check.
 
+**Tests.** Three: every edge cost map is detached after layout selection;
+cached coordinates equal uncached ones and each call hands out a distinct list;
+and both memoized values, recomputed fresh *during* the search, still equal what
+the caches are serving. That last is deliberately not a snapshot-vs-fresh check
+at construction time, which would pass even if a later layout rebinding had
+invalidated the entry.
+
 **What this does not do.** The search makes exactly the same decisions — in a
 runtime-shim prototype of the same change, `n_states_built`, `cost_calls` and
 `device_coordinates` call counts were identical between arms. It skips
 recomputation, it does not prune. So it does not change how the pass scales;
 that would mean reducing states per op, which is a search-quality question.
 
-**Why no pipeline or whole-compile numbers are quoted.** On the substrate used
-for these runs, `_maybe_scratchpad_planning` varies between 55 s and 72 s run to
-run at Lk=8192, which swamps both totals. Every other pre-scheduling pass is
-flat between arms to within a few ms, so the pass-level delta is the honest
-claim and the totals are not.
+**Scope of the numbers.** The counter and profile results in the section above
+were taken on `7c1d5b6`; the A/B table and the reuse factors were re-taken on
+`ff23e62` after the rebase. `_maybe_scratchpad_planning` moves +3.1% / +10.9%
+between arms, which is CP-SAT's known run-to-run nondeterminism (#4196) and not
+attributable to this change; every other pre-scheduling pass is flat to within a
+few ms.
 
 ## Does this PR introduce a user-facing change?
 

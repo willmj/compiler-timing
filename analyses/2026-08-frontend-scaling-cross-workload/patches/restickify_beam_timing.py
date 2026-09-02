@@ -94,6 +94,18 @@ class _BeamCounters:
     dc_keys: set = field(default_factory=set)
     dc_unhashable: int = 0
 
+    # Per-edge invariants that compute_restickify_needed recomputes per
+    # candidate pair: indirect_info_from_op (a function of `op` alone, and the
+    # unconditional first statement) and host_coordinates (whose inputs are the
+    # edge's construction-time snapshots). Both are candidates for hoisting
+    # into EdgeCostMap.__init__ instead of memoizing.
+    iifo_calls: int = 0
+    iifo_ns: int = 0
+    iifo_ops: set = field(default_factory=set)
+    hc_calls: int = 0
+    hc_ns: int = 0
+    hc_keys: set = field(default_factory=set)
+
     def reset(self) -> None:
         self.__init__()  # type: ignore[misc]
 
@@ -157,6 +169,18 @@ class _BeamCounters:
             "dc_unhashable": self.dc_unhashable,
             "dc_reuse_factor": (
                 self.dc_calls / len(self.dc_keys) if self.dc_keys else None
+            ),
+            "iifo_calls": self.iifo_calls,
+            "iifo_ms": self.iifo_ns / 1e6,
+            "iifo_distinct_ops": len(self.iifo_ops),
+            "iifo_reuse_factor": (
+                self.iifo_calls / len(self.iifo_ops) if self.iifo_ops else None
+            ),
+            "hc_calls": self.hc_calls,
+            "hc_ms": self.hc_ns / 1e6,
+            "hc_distinct": len(self.hc_keys),
+            "hc_reuse_factor": (
+                self.hc_calls / len(self.hc_keys) if self.hc_keys else None
             ),
             "live_len_sum": self.live_len_sum,
             "live_max": self.live_max,
@@ -434,6 +458,43 @@ def _install_repetition_probes() -> None:
         _probed_dc._spyre_probed = True  # type: ignore[attr-defined]
         pu.device_coordinates = _probed_dc
         _REPORT.wrapped.append("pass_utils.device_coordinates (probe)")
+
+    orig_iifo = getattr(pu, "indirect_info_from_op", None)
+    if orig_iifo is not None and not getattr(orig_iifo, "_spyre_probed", False):
+
+        @functools.wraps(orig_iifo)
+        def _probed_iifo(op, *a, **k):
+            _C.iifo_calls += 1
+            _C.iifo_ops.add(getattr(op, "name", id(op)))
+            t0 = time.perf_counter_ns()
+            try:
+                return orig_iifo(op, *a, **k)
+            finally:
+                _C.iifo_ns += time.perf_counter_ns() - t0
+
+        _probed_iifo._spyre_probed = True  # type: ignore[attr-defined]
+        pu.indirect_info_from_op = _probed_iifo
+        _REPORT.wrapped.append("pass_utils.indirect_info_from_op (probe)")
+
+    orig_hc = getattr(pu, "host_coordinates", None)
+    if orig_hc is not None and not getattr(orig_hc, "_spyre_probed", False):
+
+        @functools.wraps(orig_hc)
+        def _probed_hc(host, dep, sizes, *a, **k):
+            _C.hc_calls += 1
+            try:
+                _C.hc_keys.add((_key(host), _key(dep), _key(sizes)))
+            except Exception:
+                pass
+            t0 = time.perf_counter_ns()
+            try:
+                return orig_hc(host, dep, sizes, *a, **k)
+            finally:
+                _C.hc_ns += time.perf_counter_ns() - t0
+
+        _probed_hc._spyre_probed = True  # type: ignore[attr-defined]
+        pu.host_coordinates = _probed_hc
+        _REPORT.wrapped.append("pass_utils.host_coordinates (probe)")
 
 
 def _install_beam_width_experiment() -> None:
